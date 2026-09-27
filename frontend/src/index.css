@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles for mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply font-sans bg-ground text-ink;
+  overscroll-behavior: none;
+}
+
+/* Prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

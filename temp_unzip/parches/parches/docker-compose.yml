@@ -1,0 +1,102 @@
+# docker-compose.yml  —  CORREGIDO
+#
+#  - `version:` eliminado (obsoleto en Compose v2, genera warning).
+#  - Healthcheck real de Postgres + depends_on: condition (antes el backend arrancaba
+#    antes que la base y moría en el primer arranque).
+#  - Las migraciones se ejecutan al arrancar (`alembic upgrade head`). Antes NADA
+#    creaba las tablas en producción: el seed solo corre en ENVIRONMENT=development.
+#  - Sin contraseñas por defecto: si falta una variable, el stack no levanta.
+#  - uvicorn con --proxy-headers para que el rate limit y la auditoría vean la IP real.
+#  - Healthchecks de backend y frontend para que Traefik no enrute contenedores muertos.
+#  - El puerto de Postgres NO se publica al host.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mi_jornada_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-mi_jornada}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-mi_jornada}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mi_jornada_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mi_jornada_backend
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mi_jornada}
+      SECRET_KEY: ${SECRET_KEY:?falta SECRET_KEY}
+      ENVIRONMENT: production
+      POSTGRES_HOST: db
+      TIMEZONE: America/Monterrey
+      BACKEND_CORS_ORIGINS: https://myjornada.pleg.com.mx
+      TRUSTED_PROXY_HOPS: 2
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mi_jornada_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mi_jornada_frontend
+    restart: always
+    expose:
+      - "80"
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mi_jornada_network
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.myjornada.rule=Host(`myjornada.pleg.com.mx`)"
+      - "traefik.http.routers.myjornada.entrypoints=websecure"
+      - "traefik.http.routers.myjornada.tls=true"
+      - "traefik.http.routers.myjornada.tls.certresolver=letsencrypt"
+      - "traefik.http.services.myjornada.loadbalancer.server.port=80"
+      # Cabeceras de seguridad básicas
+      - "traefik.http.middlewares.myjornada-sec.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.myjornada-sec.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.myjornada-sec.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.myjornada-sec.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.myjornada-sec.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.routers.myjornada.middlewares=myjornada-sec@docker"
+
+networks:
+  mi_jornada_network:
+    driver: bridge
+  traefik-network:
+    external: true
+
+volumes:
+  postgres_data:

@@ -1,0 +1,39 @@
+# .gitignore  —  REEMPLAZA el actual
+#
+# El .gitignore del repo era el que pytest genera dentro de .pytest_cache
+# (contenido: "*"), y el README.md también era el de .pytest_cache.
+# Además .env está versionado CON credenciales reales: sácalo del historial y rota
+# la contraseña de Postgres y el SECRET_KEY (todos los tokens emitidos quedan inválidos).
+
+# Entorno / secretos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
