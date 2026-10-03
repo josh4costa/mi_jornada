@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 from app.models.user import UserRole
@@ -31,6 +32,7 @@ class UserUpdate(TechnicianFields):
     password: Optional[str] = Field(default=None, min_length=8, max_length=72)
 
 class UserResponse(UserBase):
+    deleted_at: Optional[datetime] = None
     must_change_password: bool = False
     # Existing records may use legacy internal domains; validate email on input only.
     email: str
@@ -40,3 +42,6 @@ class UserResponse(UserBase):
 
 class UserStatusUpdate(BaseModel):
     is_active: bool = Field(default=False, strict=True)
+
+class UserRemoval(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)

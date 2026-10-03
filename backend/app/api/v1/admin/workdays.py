@@ -11,7 +11,7 @@
 import math
 import uuid
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -168,7 +168,7 @@ async def get_workday_detail(
 
 
 from pydantic import BaseModel, Field
-from app.services.workday_admin import change
+from app.services.workday_admin import change, create
 
 class WorkdayAction(BaseModel):
     revision: int = Field(ge=0)
@@ -177,6 +177,17 @@ class WorkdayAction(BaseModel):
 class WorkdayEdit(WorkdayAction):
     check_in_at: datetime
     check_out_at: datetime | None = None
+
+class WorkdayCreate(BaseModel):
+    technician_id: uuid.UUID
+    check_in_at: datetime
+    check_out_at: datetime | None = None
+    shift_kind: Literal['DAY', 'NIGHT'] = 'DAY'
+    reason: str = Field(min_length=3, max_length=1000)
+
+@router.post('', status_code=201)
+async def create_workday(body: WorkdayCreate, current_user: User = Depends(get_current_admin_user), db: AsyncSession = Depends(get_db)):
+    return await create(db, body, current_user)
 
 @router.patch('/{id}')
 async def edit_workday(id: uuid.UUID, body: WorkdayEdit, current_user: User = Depends(get_current_admin_user), db: AsyncSession = Depends(get_db)):

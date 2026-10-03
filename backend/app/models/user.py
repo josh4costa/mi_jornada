@@ -22,6 +22,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(150))
     role: Mapped[UserRole] = mapped_column(default=UserRole.TECHNICIAN)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

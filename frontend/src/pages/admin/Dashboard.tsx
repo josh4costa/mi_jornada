@@ -77,7 +77,6 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="flex gap-3">
           <button className="px-4 py-2 border border-border text-ink rounded-btn hover:bg-border/30 transition-colors font-medium">Exportar CSV</button>
-          <button className="px-4 py-2 bg-accent text-ink rounded-btn hover:bg-accent/90 transition-colors font-medium">Asignar tarea</button>
         </div>
       </div>
 

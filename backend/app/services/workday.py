@@ -13,7 +13,9 @@ from app.services.audit import audit_event, AuditAction
 
 async def check_in(db: AsyncSession, technician_id: uuid.UUID, lat: float=None, lon: float=None, acc: float=None, user_id: uuid.UUID=None, night_plan_id=None, commit=True, at=None):
     # Serialize check-in/out for this technician, including the first workday.
-    await db.execute(select(Technician).where(Technician.id == technician_id).with_for_update())
+    technician = await db.scalar(select(Technician).where(Technician.id == technician_id).with_for_update().execution_options(populate_existing=True))
+    if not technician or not technician.is_active:
+        raise HTTPException(409, 'El técnico está inactivo o eliminado. No puede iniciar una jornada.')
     today = today_local()
     from app.models.night_plan import NightPlan
     from app.services.night_shift import day_exception

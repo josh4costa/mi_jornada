@@ -31,7 +31,9 @@ from app.core.timezone import now_utc
 from app.db.session import get_db
 from app.models.refresh_token import RefreshToken
 from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserStatusUpdate
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserStatusUpdate, UserRemoval
+from app.models.attendance import AttendanceEvent
+from app.models.workday import Workday, WorkdayStatus
 from app.services.users import sync_technician_profile
 from app.services.audit import AuditAction, audit_event
 
@@ -91,6 +93,7 @@ async def _update_profile(db, profile, values):
 
 @router.get("")
 async def list_users(
+    include_deleted: bool = False,
     search: Optional[str] = None,
     role: Optional[UserRole] = None,
     page: int = Query(1, ge=1),
@@ -98,7 +101,7 @@ async def list_users(
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    filters = []
+    filters = [] if include_deleted else [User.deleted_at.is_(None)]
     if role is not None:
         filters.append(User.role == role)
     if search:
@@ -185,6 +188,8 @@ async def update_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     data = body.model_dump(exclude_unset=True)
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="Primero restaura al técnico eliminado")
     profile_data = {key: data.pop(key) for key in ("phone", "employee_number", "reminders_enabled") if key in data}
     if any(value is None for value in data.values()):
         raise HTTPException(status_code=422, detail="Los campos de usuario no pueden ser nulos")
@@ -249,6 +254,8 @@ async def set_user_status(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     is_active = payload.is_active
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="Primero restaura al técnico eliminado")
 
     if not is_active:
         if user.id == current_user.id:
@@ -278,3 +285,46 @@ async def set_user_status(
         metadata_json={"is_active": is_active},
     )
     return user
+
+
+async def _removal(db, user_id, actor, body, restore=False):
+    reason = body.reason.strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=422, detail="Indica un motivo de al menos 3 caracteres")
+    user = await db.scalar(select(User).where(User.id == _parse_uuid(user_id)).with_for_update().execution_options(populate_existing=True))
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if user.role != UserRole.TECHNICIAN:
+        raise HTTPException(status_code=409, detail="Esta opción solo permite eliminar técnicos")
+    if (user.deleted_at is not None) != restore:
+        raise HTTPException(status_code=409, detail="El técnico ya está eliminado" if not restore else "El técnico no está eliminado")
+    # Use the same technician lock as check-in and manual workday creation.
+    profile = await db.scalar(select(Technician).where(Technician.user_id == user.id).with_for_update().execution_options(populate_existing=True))
+    if profile and not restore:
+        opened = await db.scalar(select(Workday.id).where(Workday.technician_id == profile.id, Workday.status == WorkdayStatus.OPEN, Workday.is_void.is_(False)))
+        if opened:
+            raise HTTPException(status_code=409, detail="El técnico tiene una jornada abierta. Ciérrala o anúlala en Jornadas antes de eliminarlo.")
+    user.deleted_at = None if restore else now_utc()
+    user.is_active = False
+    user.credential_version += 1
+    if profile:
+        profile.is_active = False
+        profile.reminders_enabled = False
+    await db.execute(update(RefreshToken).where(RefreshToken.user_id == user.id).values(is_revoked=True))
+    await db.execute(update(PasswordReset).where(PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None)).values(used_at=now_utc()))
+    db.add(AttendanceEvent(actor_id=actor.id, entity_id=user.id,
+        action='TECHNICIAN_RESTORED' if restore else 'TECHNICIAN_DELETED',
+        details={'reason': reason, 'technician_id': str(profile.id) if profile else None}))
+    await _commit(db)
+    await db.refresh(user, ['technician'])
+    return user
+
+
+@router.post('/{id}/delete', response_model=UserResponse)
+async def delete_technician(id: str, body: UserRemoval, current_user: User = Depends(get_current_admin_user), db: AsyncSession = Depends(get_db)):
+    return await _removal(db, id, current_user, body)
+
+
+@router.post('/{id}/restore', response_model=UserResponse)
+async def restore_technician(id: str, body: UserRemoval, current_user: User = Depends(get_current_admin_user), db: AsyncSession = Depends(get_db)):
+    return await _removal(db, id, current_user, body, restore=True)

@@ -5,6 +5,7 @@ export type TaskPriority = 'NORMAL' | 'HIGH';
 export type CreatedByType = 'ADMIN' | 'TECHNICIAN';
 
 export interface User {
+  deleted_at?: string | null;
   must_change_password?: boolean;
   technician?: { id: string; employee_number: string | null; phone: string | null; reminders_enabled?: boolean } | null;
   id: string;

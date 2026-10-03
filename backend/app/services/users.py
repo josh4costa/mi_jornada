@@ -8,7 +8,7 @@ async def sync_technician_profile(db: AsyncSession, user: User) -> Technician | 
     """Keep the operational profile consistent without deleting historical records."""
     await db.flush()
     profile = await db.scalar(select(Technician).where(Technician.user_id == user.id))
-    active = user.role == UserRole.TECHNICIAN and user.is_active
+    active = user.role == UserRole.TECHNICIAN and user.is_active and user.deleted_at is None
     if profile is None and user.role == UserRole.TECHNICIAN:
         profile = Technician(user_id=user.id, is_active=active)
         db.add(profile)

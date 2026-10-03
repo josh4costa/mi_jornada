@@ -22,6 +22,82 @@ async function session(page: Page, role = 'TECHNICIAN', mustChange = false) {
 
 const workday = { id: 'w1', work_date: '2026-09-19', status: 'OPEN', check_in_at: '2026-09-19T15:00:00Z' };
 
+test('admin removes and restores technician with a reason on mobile', async ({ page }) => {
+  await session(page, 'ADMIN');
+  await page.setViewportSize({ width: 390, height: 844 });
+  let deleted = false;
+  let reason = '';
+  await page.route('**/api/v1/admin/users**', route => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      reason = request.postDataJSON().reason;
+      deleted = request.url().endsWith('/delete');
+      return route.fulfill({ json: {} });
+    }
+    const visible = !deleted || new URL(request.url()).searchParams.get('include_deleted') === 'true';
+    return route.fulfill({ json: { items: visible ? [{ id: 't1', full_name: 'Persona de prueba', username: 'prueba', email: 'test@example.com', role: 'TECHNICIAN', is_active: !deleted, deleted_at: deleted ? '2026-09-28T15:00:00Z' : null }] : [], total: visible ? 1 : 0, pages: 1 } });
+  });
+  await page.goto('/admin/personal');
+  await page.getByRole('button', { name: 'Eliminar a Persona de prueba', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Eliminar técnico', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('motivo');
+  await page.getByLabel('Motivo del cambio').fill('Baja autorizada');
+  await dialog.getByRole('button', { name: 'Eliminar técnico', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Técnico eliminado');
+  expect(reason).toBe('Baja autorizada');
+  await expect(page.getByRole('heading', { name: 'Persona de prueba' })).toHaveCount(0);
+  await page.getByLabel('Mostrar también técnicos eliminados').check();
+  await expect(page.getByText('Eliminado · historial conservado')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Editar a Persona de prueba' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Restaurar a Persona de prueba' }).click();
+  await page.getByLabel('Motivo del cambio').fill('Reingreso autorizado');
+  await dialog.getByRole('button', { name: 'Restaurar técnico', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('restaurado como inactivo');
+  await expect(page.getByRole('button', { name: 'Editar a Persona de prueba' })).toBeVisible();
+});
+
+test('administrator adds justified workday on mobile', async ({ page }) => {
+  await session(page, 'ADMIN');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/v1/admin/technicians**', route => route.fulfill({ json: [{ id: 't1', full_name: 'Técnico de prueba' }] }));
+  let saved: any = null;
+  await page.route('**/api/v1/admin/workdays**', route => {
+    if (route.request().method() === 'POST') {
+      saved = route.request().postDataJSON();
+      return route.fulfill({ status: 201, json: { id: 'new', work_date: '2026-09-25' } });
+    }
+    return route.fulfill({ json: { items: saved ? [{ id: 'new', technician_name: 'Técnico de prueba', work_date: '2026-09-25', check_in_at: '2026-09-25T15:00:00Z', status: 'OPEN', revision: 1 }] : [], total: saved ? 1 : 0 } });
+  });
+  await page.goto('/admin/jornadas');
+  await page.getByRole('button', { name: 'Agregar jornada', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar jornada', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await page.getByLabel('Técnico de la jornada').selectOption('t1');
+  await page.getByLabel('Entrada de la jornada').fill('2026-09-25T09:00');
+  await page.getByLabel('Justificación del registro').fill('Olvidó registrar; entrada verificada');
+  await page.getByRole('button', { name: 'Guardar jornada', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Jornada agregada');
+  expect(saved.check_out_at).toBeNull();
+  expect(saved.technician_id).toBe('t1');
+});
+
+test('read only cannot add journeys and operation has no assignment button', async ({ page }) => {
+  await session(page, 'READ_ONLY');
+  await page.route('**/api/v1/admin/technicians**', route => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/admin/workdays**', route => route.fulfill({ json: { items: [], total: 0 } }));
+  await page.route('**/api/v1/admin/dashboard', route => route.fulfill({ json: { working_now: 0, not_started: 0, finished: 0, tasks_completed: 0, tasks_pending: 0, technicians: [] } }));
+  await page.goto('/admin/jornadas');
+  await expect(page.getByRole('heading', { name: 'Jornadas', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Agregar jornada' })).toHaveCount(0);
+  await page.goto('/admin');
+  await expect(page.getByText('Técnicos en campo')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Asignar tarea' })).toHaveCount(0);
+});
+
 test('mandatory personal password blocks navigation and returns to login', async ({page}) => {
   await session(page, 'TECHNICIAN', true);
   await page.setViewportSize({width: 390, height: 844});

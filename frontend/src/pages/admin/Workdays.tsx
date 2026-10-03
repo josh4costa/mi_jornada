@@ -25,6 +25,25 @@ const Workdays: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState('');
   const [history, setHistory] = useState<any[] | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newTech, setNewTech] = useState('');
+  const [newShift, setNewShift] = useState('DAY');
+  async function saveNew() {
+    if (!newTech || !entry || reason.trim().length < 3) {
+      setModalError('Selecciona el técnico, la entrada y una justificación de al menos 3 caracteres.'); return;
+    }
+    setSaving(true); setModalError('');
+    try {
+      const { data } = await client.post('/admin/workdays', { technician_id: newTech, shift_kind: newShift, check_in_at: entry, check_out_at: exit || null, reason });
+      setCreating(false);
+      setNotice('Jornada agregada con justificación e historial. Las incidencias pendientes se actualizaron; las faltas ya resueltas deben revisarse en Ausencias y asistencia.');
+      setFilters({ date_from: data.work_date, date_to: data.work_date, technician_id: newTech, status: '', include_void: '' });
+      setPage(1);
+      const result = await adminApi.getWorkdays({ date_from: data.work_date, date_to: data.work_date, technician_id: newTech, page: 1, size });
+      setWorkdays(result.items); setTotal(result.total);
+    } catch (err: any) { setModalError(err.friendlyMessage || 'No se pudo agregar la jornada.'); }
+    finally { setSaving(false); }
+  }
   function localInput(iso?: string | null) {
     if (!iso) return '';
     const parts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso));
@@ -125,7 +144,7 @@ const Workdays: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-ink">Jornadas</h1>
+      <div className="flex flex-wrap justify-between gap-3"><h1 className="text-2xl font-bold text-ink">Jornadas</h1>{isAdmin && <Button onClick={() => { setCreating(true); setNewTech(filters.technician_id); setNewShift('DAY'); setEntry(''); setExit(''); setReason(''); setModalError(''); }}>Agregar jornada</Button>}</div>
       {notice && <p role="status" className="text-green-800">{notice}</p>}
       {error && <p role="alert" className="text-red-700">{error}</p>}
       <label className="flex gap-2 items-center"><input type="checkbox" checked={!!filters.include_void} onChange={e => setFilters({ ...filters, include_void: e.target.checked ? 'true' : '' })} />Mostrar también jornadas anuladas (pulsa Buscar)</label>
@@ -302,8 +321,20 @@ const Workdays: React.FC = () => {
           <label className="block">Motivo del cambio<textarea className="w-full border rounded-lg p-2 mt-1" value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} /></label>
         </div>
       </Modal>
+      <Modal isOpen={creating} onClose={() => !saving && setCreating(false)} title="Agregar jornada justificada" onConfirm={saveNew} confirmText="Guardar jornada" loading={saving}>
+        <div className="space-y-3">
+          {modalError && <p role="alert" className="text-red-700">{modalError}</p>}
+          <p className="text-sm">Indica las horas reales en horario de Monterrey. La fecha de la jornada se toma de la entrada. Este registro administrativo conserva tu nombre y la justificación; no registra una ubicación GPS.</p>
+          <label className="block">Técnico de la jornada<select className="w-full border rounded-lg p-2 mt-1" value={newTech} onChange={e => setNewTech(e.target.value)}><option value="">Seleccionar técnico</option>{technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label className="block">Tipo de jornada<select className="w-full border rounded-lg p-2 mt-1" value={newShift} onChange={e => setNewShift(e.target.value)}><option value="DAY">Diurna</option><option value="NIGHT">Nocturna</option></select></label>
+          <label className="block">Entrada de la jornada<input type="datetime-local" step="1" className="w-full border rounded-lg p-2 mt-1" value={entry} onChange={e => setEntry(e.target.value)} /></label>
+          <label className="block">Salida de la jornada (opcional)<input type="datetime-local" step="1" className="w-full border rounded-lg p-2 mt-1" value={exit} onChange={e => setExit(e.target.value)} /></label>
+          <p className="text-sm text-muted">Deja la salida vacía solo si el técnico sigue trabajando. Las salidas diurnas anticipadas quedan pendientes de revisión.</p>
+          <label className="block">Justificación del registro<textarea className="w-full border rounded-lg p-2 mt-1" maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></label>
+        </div>
+      </Modal>
       <Modal isOpen={history !== null} onClose={() => setHistory(null)} title="Historial de cambios de jornada">
-        <div className="space-y-4">{!history?.length && <p>No hay cambios administrativos registrados.</p>}{history?.map(item => <div key={item.id} className="border-b pb-3 text-sm"><p className="font-semibold">{({ WORKDAY_EDIT: 'Edición', WORKDAY_VOID: 'Anulación', WORKDAY_RESTORE: 'Restauración' } as Record<string, string>)[item.action] || item.action}</p><p>{new Date(item.created_at).toLocaleString('es-MX', { timeZone: 'America/Monterrey' })} · {item.actor_name || 'Administrador'}</p><p>{item.details.note}</p>{item.details.before && <><p>Antes: {formatTime(item.details.before.check_in_at)} → {formatTime(item.details.before.check_out_at)} · {formatDuration(item.details.before.duration_minutes)}</p><p>Después: {formatTime(item.details.after.check_in_at)} → {formatTime(item.details.after.check_out_at)} · {formatDuration(item.details.after.duration_minutes)}</p></>}</div>)}</div>
+        <div className="space-y-4">{!history?.length && <p>No hay cambios administrativos registrados.</p>}{history?.map(item => <div key={item.id} className="border-b pb-3 text-sm"><p className="font-semibold">{({ WORKDAY_CREATE: 'Alta justificada', WORKDAY_EDIT: 'Edición', WORKDAY_VOID: 'Anulación', WORKDAY_RESTORE: 'Restauración' } as Record<string, string>)[item.action] || item.action}</p><p>{new Date(item.created_at).toLocaleString('es-MX', { timeZone: 'America/Monterrey' })} · {item.actor_name || 'Administrador'}</p><p>{item.details.note}</p>{item.details.before && <><p>Antes: {formatTime(item.details.before.check_in_at)} → {formatTime(item.details.before.check_out_at)} · {formatDuration(item.details.before.duration_minutes)}</p><p>Después: {formatTime(item.details.after.check_in_at)} → {formatTime(item.details.after.check_out_at)} · {formatDuration(item.details.after.duration_minutes)}</p></>}</div>)}</div>
       </Modal>
     </div>
   );
