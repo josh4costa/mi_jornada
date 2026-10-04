@@ -1,0 +1,38 @@
+{
+  "language": "spanish",
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.prod*)",
+      "Read(~/.ssh/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(docker compose down -v *)",
+      "Bash(docker volume rm *)",
+      "Bash(gh repo delete *)",
+      "Bash(gh repo edit *)"
+    ],
+    "ask": [
+      "Bash(gh pr merge *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guardian.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
