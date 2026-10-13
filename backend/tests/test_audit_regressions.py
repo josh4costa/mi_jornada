@@ -18,7 +18,7 @@ def bearer(token):
 
 
 async def test_refresh_rotation_and_reuse(client):
-    login = await client.post('/api/v1/auth/login', json={"username_or_email": "admin", "password": "Admin2024!"})
+    login = await client.post('/api/v1/auth/login', json={"username_or_email": "admin", "password": settings.ADMIN_PASSWORD})
     old = login.json()['refresh_token']
     refresh = await client.post('/api/v1/auth/refresh', json={"refresh_token": old})
     assert refresh.status_code == 200

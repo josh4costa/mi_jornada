@@ -4,6 +4,7 @@ from app.models.user import User, UserRole
 from app.models.technician import Technician
 from app.models.workday import Workday, WorkdayStatus
 from app.models.task import Task, TaskStatus, TaskPriority, CreatedByType
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.core.timezone import today_local, now_utc
 from datetime import datetime, timezone, timedelta
@@ -13,7 +14,9 @@ async def seed_demo_data(db: AsyncSession):
     admin_exists = await db.scalar(select(User).where(User.username == "admin"))
     if admin_exists:
         return
-        
+    if not settings.ADMIN_PASSWORD:
+        raise RuntimeError("Falta ADMIN_PASSWORD en .env para crear el admin de demostración.")
+
     from app.models.account_setup import TaskLocation, INITIAL_LOCATIONS, location_id
     if not await db.scalar(select(TaskLocation.id).limit(1)):
         db.add_all([TaskLocation(id=location_id(g,n), group_name=g, name=n) for g,names in INITIAL_LOCATIONS.items() for n in names])
@@ -21,7 +24,7 @@ async def seed_demo_data(db: AsyncSession):
         must_change_password=False,
         username="admin",
         email="admin@mijornada.local",
-        password_hash=get_password_hash("Admin2024!"),
+        password_hash=get_password_hash(settings.ADMIN_PASSWORD),
         full_name="Administrador",
         role=UserRole.ADMIN
     )

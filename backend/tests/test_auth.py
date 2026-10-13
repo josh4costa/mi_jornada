@@ -1,11 +1,12 @@
 import pytest
 from httpx import AsyncClient
+from app.core.config import settings
 
 @pytest.mark.asyncio
 async def test_login_success(client: AsyncClient):
     response = await client.post("/api/v1/auth/login", json={
         "username_or_email": "admin",
-        "password": "Admin2024!"
+        "password": settings.ADMIN_PASSWORD
     })
     assert response.status_code == 200
     assert "access_token" in response.json()
