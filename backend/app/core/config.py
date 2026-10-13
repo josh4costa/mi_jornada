@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 15
 
+    # Contraseña del admin inicial: la usan create_admin.py y el seed de development.
+    ADMIN_PASSWORD: str = ""
+
     TIMEZONE: str = "America/Monterrey"
     ENVIRONMENT: str = "development"
     BACKEND_CORS_ORIGINS: list[str] = ["*"]

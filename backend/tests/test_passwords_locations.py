@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 from app.models import User, Technician, Task
 from app.models.account_setup import PasswordReset, TaskLocation, location_id
+from app.core.config import settings
 from app.core.security import hash_token
 from app.core.timezone import now_utc, today_local
 from app.api.v1 import passwords
@@ -40,16 +41,16 @@ async def test_forced_password_change_and_session_revocation(client, db, admin_t
     user = await db.scalar(select(User).where(User.username == 'admin'))
     user.must_change_password = True
     await db.commit()
-    login = (await client.post('/api/v1/auth/login', json={'username_or_email': 'admin', 'password': 'Admin2024!'})).json()
+    login = (await client.post('/api/v1/auth/login', json={'username_or_email': 'admin', 'password': settings.ADMIN_PASSWORD})).json()
     assert login['user']['must_change_password']
     denied = await client.get('/api/v1/admin/dashboard', headers=h(admin_token))
     assert denied.status_code == 403 and denied.json()['detail']['code'] == 'PASSWORD_CHANGE_REQUIRED'
     assert (await client.get('/api/v1/auth/me', headers=h(admin_token))).status_code == 200
     for payload, status in [({'current_password': 'wrong', 'new_password': 'PersonalPass123!'},400),
-                            ({'current_password': 'Admin2024!', 'new_password': 'short'},422),
-                            ({'current_password': 'Admin2024!', 'new_password': 'á'*40},422)]:
+                            ({'current_password': settings.ADMIN_PASSWORD, 'new_password': 'short'},422),
+                            ({'current_password': settings.ADMIN_PASSWORD, 'new_password': 'á'*40},422)]:
         assert (await client.post('/api/v1/auth/change-password', json=payload, headers=h(admin_token))).status_code == status
-    changed = await client.post('/api/v1/auth/change-password', json={'current_password': 'Admin2024!', 'new_password': 'PersonalPass123!'}, headers=h(admin_token))
+    changed = await client.post('/api/v1/auth/change-password', json={'current_password': settings.ADMIN_PASSWORD, 'new_password': 'PersonalPass123!'}, headers=h(admin_token))
     assert changed.status_code == 200
     assert (await client.get('/api/v1/auth/me', headers=h(admin_token))).status_code == 401
     assert (await client.post('/api/v1/auth/refresh', json={'refresh_token': login['refresh_token']})).status_code == 401

@@ -3,9 +3,12 @@ import pytest_asyncio
 import asyncio
 from httpx import AsyncClient, ASGITransport
 import os
+import secrets
 
 # Set testing mode before importing anything
 os.environ["TESTING"] = "1"
+# Contraseña de admin aleatoria por corrida: las pruebas no usan la del .env.
+os.environ["ADMIN_PASSWORD"] = secrets.token_urlsafe(16)
 
 from app.main import app
 from app.db.session import engine, AsyncSessionLocal
