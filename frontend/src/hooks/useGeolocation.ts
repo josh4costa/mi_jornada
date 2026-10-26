@@ -36,7 +36,7 @@ export function useGeolocation() {
           setLoading(false);
           let msg = 'No se pudo obtener la ubicación. Verifica que el GPS esté activado.';
           if (err.code === err.PERMISSION_DENIED) {
-            msg = 'Necesitamos tu ubicación para registrar la entrada. Por favor, permite el acceso.';
+            msg = 'Necesitamos tu ubicación para registrar tu entrada o salida. Por favor, permite el acceso.';
           }
           setError(msg);
           reject(new Error(msg));

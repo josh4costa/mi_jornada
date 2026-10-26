@@ -27,6 +27,18 @@ def duration(minutes):
     return f'{minutes // 60} h {minutes % 60:02d} min'
 
 
+def map_url(lat, lon):
+    # Enlace a Google Maps del punto GPS; None si la marca no trae ubicación.
+    if lat is None or lon is None:
+        return None
+    return f'https://www.google.com/maps/search/?api=1&query={float(lat):.7f},{float(lon):.7f}'
+
+
+def map_links(wd):
+    return {'entry_map': map_url(wd.check_in_latitude, wd.check_in_longitude) if wd else None,
+            'exit_map': map_url(wd.check_out_latitude, wd.check_out_longitude) if wd and wd.check_out_at else None}
+
+
 
 
 
@@ -190,7 +202,7 @@ async def report_data(db, start: date, end: date, technician_id=None):
 
                 'hours': duration(wd.duration_minutes or 0) if wd and wd.check_out_at else '-',
 
-                'state': state, 'notes': '; '.join(notes) or '-'})
+                'state': state, 'notes': '; '.join(notes) or '-', 'has_workday': bool(wd), **map_links(wd)})
 
         for wd in sorted(nights, key=lambda w: w.check_in_at):
 
@@ -212,7 +224,8 @@ async def report_data(db, start: date, end: date, technician_id=None):
 
                 'state': 'Nocturna registrada' if wd.check_out_at else 'Nocturna abierta',
 
-                'notes': 'Duración mayor a 16 horas; revisar' if (wd.duration_minutes or 0) > 960 else 'Sin horario fijo. La fecha corresponde a la entrada.'})
+                'notes': 'Duración mayor a 16 horas; revisar' if (wd.duration_minutes or 0) > 960 else 'Sin horario fijo. La fecha corresponde a la entrada.',
+                'has_workday': True, **map_links(wd)})
 
         plans = (await db.scalars(select(NightPlan).where(NightPlan.technician_id == tech.id, NightPlan.work_date >= start, NightPlan.work_date <= end, NightPlan.status.in_(['PENDING', 'APPROVED'])))).all()
 

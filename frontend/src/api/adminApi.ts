@@ -96,6 +96,8 @@ export interface AdminWorkdayItem {
   tasks_completed: number;
   check_in_latitude?: number | null;
   check_in_longitude?: number | null;
+  check_out_latitude?: number | null;
+  check_out_longitude?: number | null;
 }
 
 /* ---------- Reportes ---------- */
