@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 from app.models.workday import WorkdayStatus
 
 class WorkdayLocation(BaseModel):
-    latitude: Optional[float] = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
-    longitude: Optional[float] = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+    # Entrada, salida y continuación de jornada exigen el punto GPS del técnico.
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
     accuracy: Optional[float] = Field(default=None, ge=0, le=999999.99, allow_inf_nan=False)
 
 class WorkdayCheckin(WorkdayLocation):

@@ -63,12 +63,12 @@ async def test_previous_workday_survives_and_can_be_closed(client, db):
     today = await client.get('/api/v1/workdays/today', headers=headers)
     assert today.json()['status'] == 'WORKING'
     assert today.json()['workday']['id'] == str(day.id)
-    assert (await client.post('/api/v1/workdays/check-in', headers=headers, json={})).status_code == 409
+    assert (await client.post('/api/v1/workdays/check-in', headers=headers, json={'latitude': 25.6866, 'longitude': -100.3161})).status_code == 409
     await db.refresh(day)
     assert day.status == WorkdayStatus.OPEN and day.check_out_at is None
-    closed = await client.post('/api/v1/workdays/check-out', headers=headers, json={})
+    closed = await client.post('/api/v1/workdays/check-out', headers=headers, json={'latitude': 25.6866, 'longitude': -100.3161})
     assert closed.status_code == 200 and closed.json()['duration_minutes'] >= 720
-    assert (await client.post('/api/v1/workdays/check-in', headers=headers, json={})).status_code == 200
+    assert (await client.post('/api/v1/workdays/check-in', headers=headers, json={'latitude': 25.6866, 'longitude': -100.3161})).status_code == 200
 
 
 async def test_cancelled_task_cannot_be_completed(client, admin_token, tech_juan_token):
@@ -80,9 +80,11 @@ async def test_cancelled_task_cannot_be_completed(client, admin_token, tech_juan
     assert response.status_code == 409
 
 
-async def test_invalid_coordinates_rejected(client, tech_juan_token):
-    for body in [{'latitude': 91}, {'longitude': -181}, {'accuracy': -1}]:
+async def test_invalid_or_missing_coordinates_rejected(client, tech_juan_token):
+    for body in [{'latitude': 91, 'longitude': 0}, {'latitude': 0, 'longitude': -181}, {'latitude': 0, 'longitude': 0, 'accuracy': -1},
+                 {}, {'latitude': 25.6866}, {'longitude': -100.3161}, {'latitude': None, 'longitude': None}]:
         assert (await client.post('/api/v1/workdays/check-in', headers=bearer(tech_juan_token), json=body)).status_code == 422
+        assert (await client.post('/api/v1/workdays/check-out', headers=bearer(tech_juan_token), json=body)).status_code == 422
 
 
 async def test_pagination_and_search(client, admin_token):
@@ -115,7 +117,7 @@ async def test_inactive_technician_remains_in_historical_reports(client, db, adm
 
 async def test_webhook_outbox_retry_and_stable_id(client, db, tech_juan_token, monkeypatch):
     monkeypatch.setattr(settings, 'WEBHOOK_CHECK_OUT_URL', 'https://receiver.invalid/event')
-    result = await client.post('/api/v1/workdays/check-out', headers=bearer(tech_juan_token), json={'early_exit_reason': 'Validación de webhook con salida autorizada'})
+    result = await client.post('/api/v1/workdays/check-out', headers=bearer(tech_juan_token), json={'latitude': 25.6866, 'longitude': -100.3161, 'early_exit_reason': 'Validación de webhook con salida autorizada'})
     assert result.status_code == 200
     delivery = await db.scalar(select(WebhookDelivery))
     assert delivery is not None

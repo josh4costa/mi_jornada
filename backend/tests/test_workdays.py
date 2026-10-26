@@ -18,13 +18,13 @@ async def test_today_workday_status_closed(client: AsyncClient, tech_pedro_token
 @pytest.mark.asyncio
 async def test_check_in_duplicate(client: AsyncClient, tech_juan_token: str):
     # Juan already has an open workday
-    response = await client.post("/api/v1/workdays/check-in", json={}, headers={"Authorization": f"Bearer {tech_juan_token}"})
+    response = await client.post("/api/v1/workdays/check-in", json={'latitude': 25.6866, 'longitude': -100.3161}, headers={"Authorization": f"Bearer {tech_juan_token}"})
     assert response.status_code == 409
 
 @pytest.mark.asyncio
 async def test_check_out_success(client: AsyncClient, tech_juan_token: str):
     # Juan checks out
-    response = await client.post("/api/v1/workdays/check-out", json={"early_exit_reason": "Salida de prueba"}, headers={"Authorization": f"Bearer {tech_juan_token}"})
+    response = await client.post("/api/v1/workdays/check-out", json={'latitude': 25.6866, 'longitude': -100.3161, "early_exit_reason": "Salida de prueba"}, headers={"Authorization": f"Bearer {tech_juan_token}"})
     assert response.status_code == 200
     assert response.json()["status"] == "CLOSED"
     assert response.json()["duration_minutes"] is not None
@@ -32,5 +32,5 @@ async def test_check_out_success(client: AsyncClient, tech_juan_token: str):
 @pytest.mark.asyncio
 async def test_check_out_without_check_in(client: AsyncClient, tech_pedro_token: str):
     # Pedro's workday is already closed
-    response = await client.post("/api/v1/workdays/check-out", json={"early_exit_reason": "Salida de prueba"}, headers={"Authorization": f"Bearer {tech_pedro_token}"})
+    response = await client.post("/api/v1/workdays/check-out", json={'latitude': 25.6866, 'longitude': -100.3161, "early_exit_reason": "Salida de prueba"}, headers={"Authorization": f"Bearer {tech_pedro_token}"})
     assert response.status_code == 400
