@@ -57,7 +57,7 @@ async def test_void_open_allows_new_entry_but_blocks_restore_conflict(client, db
     assert result.status_code == 200
     result = await client.get('/api/v1/workdays/today', headers=th)
     assert result.json()['status'] == 'NOT_STARTED'
-    new = await client.post('/api/v1/workdays/check-in', headers=th, json={})
+    new = await client.post('/api/v1/workdays/check-in', headers=th, json={'latitude': 25.6866, 'longitude': -100.3161})
     assert new.status_code == 200
     result = await client.patch('/api/v1/admin/workdays/' + id + '/restore', headers=h, json={'revision': 1, 'reason': 'Conflicto de prueba'})
     assert result.status_code == 409

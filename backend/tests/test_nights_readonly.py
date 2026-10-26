@@ -83,12 +83,12 @@ async def test_declared_night_approval_and_continuous_day(client, db, admin_toke
     approved = await client.patch('/api/v1/night-plans/' + id, json={'status': 'APPROVED', 'note': 'Cambio autorizado'}, headers=headers(admin_token))
     assert approved.status_code == 200, approved.text
     await db.refresh(await db.scalar(select(AttendanceIncident).where(AttendanceIncident.technician_id == tech.id, AttendanceIncident.kind == 'MISSING_ENTRY')))
-    assert (await client.post('/api/v1/workdays/check-in', json={}, headers=h)).status_code == 409
+    assert (await client.post('/api/v1/workdays/check-in', json={'latitude': 25.6866, 'longitude': -100.3161}, headers=h)).status_code == 409
     clock(monkeypatch, monday, 28)  # Monday 22:00 local; UTC Tuesday 04:00.
-    response = await client.post('/api/v1/workdays/check-in', json={'night_plan_id': id}, headers=h)
+    response = await client.post('/api/v1/workdays/check-in', json={'latitude': 25.6866, 'longitude': -100.3161, 'night_plan_id': id}, headers=h)
     assert response.status_code == 200, response.text
     assert response.json()['shift_kind'] == 'NIGHT'
-    assert (await client.post('/api/v1/workdays/check-in', json={'night_plan_id': id}, headers=h)).status_code == 409
+    assert (await client.post('/api/v1/workdays/check-in', json={'latitude': 25.6866, 'longitude': -100.3161, 'night_plan_id': id}, headers=h)).status_code == 409
     assert (await client.patch('/api/v1/night-plans/' + id, json={'status': 'CANCELLED', 'note': 'No debe cancelar'}, headers=h)).status_code == 409
     clock(monkeypatch, monday + timedelta(days=1), 15)  # Tuesday 09:00.
     today = (await client.get('/api/v1/workdays/today', headers=h)).json()
@@ -100,7 +100,7 @@ async def test_declared_night_approval_and_continuous_day(client, db, admin_toke
     assert night.duration_minutes == 660
     assert night.check_out_at.isoformat().replace('+00:00', '') == response.json()['check_in_at'].replace('Z', '').replace('+00:00', '')
     clock(monkeypatch, monday + timedelta(days=1), 24)  # Tuesday 18:00.
-    assert (await client.post('/api/v1/workdays/check-out', json={}, headers=h)).status_code == 200
+    assert (await client.post('/api/v1/workdays/check-out', json={'latitude': 25.6866, 'longitude': -100.3161}, headers=h)).status_code == 200
     tech_id = tech.id
     await db.rollback(); db.expire_all()
     report = await report_data(db, monday, monday + timedelta(days=1), tech_id)
@@ -114,19 +114,19 @@ async def test_same_date_day_night_report_and_rollback(client, db, admin_token, 
     tech, user, h = await fresh(db); tech_id = tech.id
     monday = date(2026, 9, 21)
     clock(monkeypatch, monday, 15)
-    assert (await client.post('/api/v1/workdays/check-in', json={}, headers=h)).status_code == 200
+    assert (await client.post('/api/v1/workdays/check-in', json={'latitude': 25.6866, 'longitude': -100.3161}, headers=h)).status_code == 200
     clock(monkeypatch, monday, 24)
-    assert (await client.post('/api/v1/workdays/check-out', json={}, headers=h)).status_code == 200
+    assert (await client.post('/api/v1/workdays/check-out', json={'latitude': 25.6866, 'longitude': -100.3161}, headers=h)).status_code == 200
     result = await client.post('/api/v1/night-plans', headers=headers(admin_token), json=dict(technician_id=str(tech_id), work_date=str(monday), reminder_time='20:00', reason='Servicio adicional', replaces_day=False))
     assert result.status_code == 201, result.text
     clock(monkeypatch, monday, 26)
-    result = await client.post('/api/v1/workdays/check-in', headers=h, json={'night_plan_id': result.json()['id']})
+    result = await client.post('/api/v1/workdays/check-in', headers=h, json={'latitude': 25.6866, 'longitude': -100.3161, 'night_plan_id': result.json()['id']})
     assert result.status_code == 200, result.text
     # There is already a daytime record: failed continuation must leave the night open.
-    assert (await client.post('/api/v1/workdays/continue-day', headers=h, json={})).status_code == 409
+    assert (await client.post('/api/v1/workdays/continue-day', headers=h, json={'latitude': 25.6866, 'longitude': -100.3161})).status_code == 409
     assert (await client.get('/api/v1/workdays/today', headers=h)).json()['workday']['shift_kind'] == 'NIGHT'
     clock(monkeypatch, monday + timedelta(days=1), 8)
-    response = await client.post('/api/v1/workdays/check-out', headers=h, json={})
+    response = await client.post('/api/v1/workdays/check-out', headers=h, json={'latitude': 25.6866, 'longitude': -100.3161})
     assert response.status_code == 200 and response.json()['duration_minutes'] == 360
     report = await report_data(db, monday, monday, tech_id)
     assert report['totals']['recorded'] == 1 and report['totals']['minutes'] == 900

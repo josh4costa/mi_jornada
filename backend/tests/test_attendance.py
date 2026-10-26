@@ -63,9 +63,9 @@ async def test_early_exit_requires_reason_and_is_reviewed(client, db, monkeypatc
     workday.check_in_at = datetime(2026, 9, 26, 15, tzinfo=timezone.utc)
     await db.commit()
     monkeypatch.setattr(service, 'now_utc', lambda: datetime(2026, 9, 26, 18, tzinfo=timezone.utc))  # 12:00 local
-    result = await client.post('/api/v1/workdays/check-out', json={}, headers=headers(tech_juan_token))
+    result = await client.post('/api/v1/workdays/check-out', json={'latitude': 25.6866, 'longitude': -100.3161}, headers=headers(tech_juan_token))
     assert result.status_code == 422
-    result = await client.post('/api/v1/workdays/check-out', json={'early_exit_reason': 'Cita personal autorizada'}, headers=headers(tech_juan_token))
+    result = await client.post('/api/v1/workdays/check-out', json={'latitude': 25.6866, 'longitude': -100.3161, 'early_exit_reason': 'Cita personal autorizada'}, headers=headers(tech_juan_token))
     assert result.status_code == 200, result.text
     rows = (await client.get('/api/v1/attendance/incidents', headers=headers(admin_token))).json()['items']
     assert len(rows) == 1 and rows[0]['status'] == 'PENDING'
@@ -83,7 +83,7 @@ async def test_at_saturday_exit_time_does_not_require_reason(client, db, monkeyp
     workday.check_in_at = datetime(2026, 9, 26, 15, tzinfo=timezone.utc)
     await db.commit()
     monkeypatch.setattr(service, 'now_utc', lambda: datetime(2026, 9, 26, 19, tzinfo=timezone.utc))
-    result = await client.post('/api/v1/workdays/check-out', json={}, headers=headers(tech_juan_token))
+    result = await client.post('/api/v1/workdays/check-out', json={'latitude': 25.6866, 'longitude': -100.3161}, headers=headers(tech_juan_token))
     assert result.status_code == 200
     assert await db.scalar(select(func.count(AttendanceIncident.id))) == 0
 
