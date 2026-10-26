@@ -235,9 +235,12 @@ async def report_data(db, start: date, end: date, technician_id=None):
 
                 pending = plan.work_date < today
 
+                # La incidencia de noche sin entrada puede estar ya revisada.
+                incident = next((i for i in ti if i.work_date == plan.work_date and i.kind == 'MISSING_NIGHT'), None)
+                resolved = incident.status if incident else None
                 if pending:
 
-                    summary['pending'] += 1
+                    summary[{'JUSTIFIED': 'justified', 'UNJUSTIFIED': 'unjustified'}.get(resolved, 'pending')] += 1
 
                 detail.append({'date': plan.work_date.isoformat(), 'schedule': 'Nocturno flexible', 'entry': '-', 'exit': '-', 'hours': '-',
 

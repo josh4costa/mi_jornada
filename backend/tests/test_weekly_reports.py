@@ -148,3 +148,20 @@ async def test_report_links_entry_and_exit_maps(db, monkeypatch):
     assert day['exit_map'] is None  # Salida sin GPS.
     pdf = render_pdf(data)
     assert b'google.com/maps' in pdf
+
+
+@pytest.mark.asyncio
+async def test_report_night_plan_without_entry(db, monkeypatch):
+    from app.models.night_plan import NightPlan
+    monkeypatch.setattr(attendance_report, 'now_utc', lambda: MONDAY)
+    tech = (await db.scalars(select(Technician))).first()
+    tech.created_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    await db.execute(delete(Workday).where(Workday.technician_id == tech.id))
+    for day in (date(2026,9,22), date(2026,9,23)):
+        db.add(NightPlan(technician_id=tech.id, work_date=day, status='APPROVED', requested_by=tech.user_id, reason='Prueba', reminder_at=datetime(day.year, day.month, day.day, 2, tzinfo=timezone.utc)))
+    db.add(AttendanceIncident(technician_id=tech.id, work_date=date(2026,9,23), kind='MISSING_NIGHT', status='UNJUSTIFIED', reason='Revisada'))
+    await db.commit()
+    data = await attendance_report.report_data(db, date(2026,9,22), date(2026,9,23), tech.id)
+    nights = {d['date']: d['state'] for d in data['technicians'][0]['days'] if d['schedule'] == 'Nocturno flexible'}
+    assert nights == {'2026-09-22': 'Noche sin entrada; revisar', '2026-09-23': 'Noche: falta no justificada (revisada)'}
+    assert render_pdf(data).startswith(b'%PDF')
