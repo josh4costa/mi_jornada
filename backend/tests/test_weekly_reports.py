@@ -130,3 +130,21 @@ async def test_report_absences_saturday_rest_and_void(db, monkeypatch):
     assert row['days'][-1]['state'] == 'Descanso'
     row['name'] = 'Técnico <A> & B'
     assert render_pdf(data).startswith(b'%PDF')
+
+
+@pytest.mark.asyncio
+async def test_report_links_entry_and_exit_maps(db, monkeypatch):
+    monkeypatch.setattr(attendance_report, 'now_utc', lambda: MONDAY)
+    tech = (await db.scalars(select(Technician))).first()
+    tech.created_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    await db.execute(delete(Workday).where(Workday.technician_id == tech.id))
+    entry = datetime(2026, 9, 21, 14, 55, tzinfo=timezone.utc)
+    db.add(Workday(technician_id=tech.id, work_date=date(2026,9,21), check_in_at=entry, check_out_at=entry+timedelta(hours=9),
+                   duration_minutes=540, status='CLOSED', check_in_latitude=25.6866142, check_in_longitude=-100.3161126))
+    await db.commit()
+    data = await attendance_report.report_data(db, date(2026,9,21), date(2026,9,21), tech.id)
+    day = data['technicians'][0]['days'][0]
+    assert day['entry_map'] == 'https://www.google.com/maps/search/?api=1&query=25.6866142,-100.3161126'
+    assert day['exit_map'] is None  # Salida sin GPS.
+    pdf = render_pdf(data)
+    assert b'google.com/maps' in pdf

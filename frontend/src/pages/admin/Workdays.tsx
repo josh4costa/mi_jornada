@@ -6,7 +6,7 @@ import client from '../../api/client';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
-import { Search, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Calendar, MapPin } from 'lucide-react';
 
 const Workdays: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -140,6 +140,26 @@ const Workdays: React.FC = () => {
     return `${h}h ${m.toString().padStart(2, '0')}min`;
   };
 
+  const mapUrl = (lat?: number | null, lon?: number | null) =>
+    lat != null && lon != null ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : null;
+
+  // Enlaces a Google Maps del punto GPS de entrada y de salida.
+  const mapLinks = (w: AdminWorkdayItem) => {
+    const entryMap = mapUrl(w.check_in_latitude, w.check_in_longitude);
+    const exitMap = mapUrl(w.check_out_latitude, w.check_out_longitude);
+    const link = (url: string, text: string) => (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-700 underline min-h-[44px]">
+        <MapPin className="w-4 h-4" />{text}
+      </a>
+    );
+    return (
+      <div className="flex flex-wrap gap-x-4">
+        {entryMap ? link(entryMap, 'Entrada') : <span className="text-muted">Entrada sin GPS</span>}
+        {exitMap ? link(exitMap, 'Salida') : w.check_out_at ? <span className="text-muted">Salida sin GPS</span> : null}
+      </div>
+    );
+  };
+
   const totalPages = Math.ceil(total / size);
 
   return (
@@ -213,6 +233,7 @@ const Workdays: React.FC = () => {
                     <th className="px-6 py-4">Entrada</th>
                     <th className="px-6 py-4">Salida</th>
                     <th className="px-6 py-4">Duración</th>
+                    <th className="px-6 py-4">Mapa</th>
                     <th className="px-6 py-4 text-center">Asignadas del día</th>
                     <th className="px-6 py-4 text-center">Realizadas del día</th>
                     <th className="px-6 py-4">Estado</th>
@@ -227,6 +248,7 @@ const Workdays: React.FC = () => {
                       <td className="px-6 py-4 text-muted">{formatTime(w.check_in_at)}</td>
                       <td className="px-6 py-4 text-muted">{formatTime(w.check_out_at)}</td>
                       <td className="px-6 py-4 text-muted">{formatDuration(w.duration_minutes)}</td>
+                      <td className="px-6 py-4">{mapLinks(w)}</td>
                       <td className="px-6 py-4 text-center text-muted">{w.tasks_assigned}</td>
                       <td className="px-6 py-4 text-center text-muted">{w.tasks_completed}</td>
                       <td className="px-6 py-4">
@@ -238,7 +260,7 @@ const Workdays: React.FC = () => {
                   ))}
                   {workdays.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-6 py-8 text-center text-muted">
+                      <td colSpan={10} className="px-6 py-8 text-center text-muted">
                         <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                         No se encontraron jornadas.
                       </td>
@@ -266,6 +288,7 @@ const Workdays: React.FC = () => {
                     <div><span className="block text-xs text-muted">Duración</span> {formatDuration(w.duration_minutes)}</div>
                     <div><span className="block text-xs text-muted">Tareas (Asig/Realiz)</span> {w.tasks_assigned} / {w.tasks_completed}</div>
                   </div>
+                  <div className="text-sm"><span className="block text-xs text-muted">Mapa</span>{mapLinks(w)}</div>
                   {actions(w)}
                 </div>
               ))}
